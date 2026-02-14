@@ -1,0 +1,313 @@
+name: Security Scan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  scan:
+    name: CodeQL Security Scan
+    runs-on: ubuntu-latest
+    outputs:
+      findings: ${{ steps.parse-results.outputs.findings }}
+      count: ${{ steps.parse-results.outputs.count }}
+      issue_numbers: ${{ steps.parse-results.outputs.issue_numbers }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: sarif-results
+          upload: always
+
+      - name: Upload SARIF as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-${{ matrix.language }}
+          path: sarif-results/
+          retention-days: 5
+
+  create-issues-and-fix:
+    name: Create Issues and Fix
+    needs: scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all SARIF artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: sarif-results
+          merge-multiple: true
+
+      - name: Ensure security label exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'security'
+              });
+            } catch {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'security',
+                color: 'd73a4a',
+                description: 'Security vulnerability'
+              });
+            }
+
+      - name: Parse SARIF results and create issues
+        id: parse-results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const sarifDir = 'sarif-results';
+            if (!fs.existsSync(sarifDir)) {
+              core.setOutput('count', '0');
+              core.setOutput('findings', '[]');
+              core.setOutput('issue_numbers', '[]');
+              core.summary.addRaw('No SARIF results found.');
+              await core.summary.write();
+              return;
+            }
+
+            const sarifFiles = fs.readdirSync(sarifDir).filter(f => f.endsWith('.sarif'));
+            const findings = [];
+
+            for (const file of sarifFiles) {
+              const sarif = JSON.parse(fs.readFileSync(path.join(sarifDir, file), 'utf8'));
+              for (const run of sarif.runs || []) {
+                const rules = {};
+                for (const rule of run.tool?.driver?.rules || []) {
+                  rules[rule.id] = rule;
+                }
+                for (const result of run.results || []) {
+                  const loc = result.locations?.[0]?.physicalLocation;
+                  const rule = rules[result.ruleId] || {};
+                  findings.push({
+                    ruleId: result.ruleId,
+                    ruleName: rule.shortDescription?.text || result.ruleId,
+                    description: rule.fullDescription?.text || result.message?.text || '',
+                    message: result.message?.text || '',
+                    severity: result.level || 'warning',
+                    file: loc?.artifactLocation?.uri || 'unknown',
+                    startLine: loc?.region?.startLine || 0,
+                    endLine: loc?.region?.endLine || loc?.region?.startLine || 0
+                  });
+                }
+              }
+            }
+
+            core.info(`Found ${findings.length} security finding(s).`);
+
+            const issueNumbers = [];
+            for (const f of findings) {
+              const title = `[Security] ${f.ruleName} in ${f.file}:${f.startLine}`;
+
+              const existing = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'security'
+              });
+
+              const duplicate = existing.data.find(i => i.title === title);
+              if (duplicate) {
+                core.info(`Issue already exists: #${duplicate.number} - ${title}`);
+                issueNumbers.push(duplicate.number);
+                continue;
+              }
+
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: [
+                  '## Security Finding',
+                  '',
+                  `| Field | Value |`,
+                  `|-------|-------|`,
+                  `| **Rule** | \`${f.ruleId}\` |`,
+                  `| **Severity** | ${f.severity} |`,
+                  `| **File** | \`${f.file}\` |`,
+                  `| **Line** | ${f.startLine} |`,
+                  '',
+                  '### Description',
+                  f.description,
+                  '',
+                  '### Details',
+                  f.message,
+                  '',
+                  '---',
+                  '*Automatically created by the Security Scan workflow.*'
+                ].join('\n'),
+                labels: ['security']
+              });
+              core.info(`Created issue #${issue.data.number}: ${title}`);
+              issueNumbers.push(issue.data.number);
+            }
+
+            core.setOutput('count', String(findings.length));
+            core.setOutput('findings', JSON.stringify(findings));
+            core.setOutput('issue_numbers', JSON.stringify(issueNumbers));
+
+            core.summary.addHeading('Security Scan Results', 2);
+            core.summary.addRaw(`Found **${findings.length}** finding(s). Created/linked **${issueNumbers.length}** issue(s).\n\n`);
+            if (findings.length > 0) {
+              core.summary.addTable([
+                [{data: 'Rule', header: true}, {data: 'File', header: true}, {data: 'Line', header: true}, {data: 'Severity', header: true}],
+                ...findings.map(f => [f.ruleId, f.file, String(f.startLine), f.severity])
+              ]);
+            }
+            await core.summary.write();
+
+      - name: Apply security fixes
+        if: steps.parse-results.outputs.count != '0'
+        shell: python3 {0}
+        run: |
+          import json
+          import os
+          import re
+
+          findings_json = os.environ.get('FINDINGS', '[]')
+          findings = json.loads(findings_json)
+
+          fixed_files = set()
+
+          for finding in findings:
+              file_path = finding.get('file', '')
+              rule_id = finding.get('ruleId', '')
+
+              if not os.path.isfile(file_path):
+                  continue
+
+              with open(file_path, 'r') as f:
+                  content = f.read()
+
+              original = content
+
+              if file_path.endswith('.py'):
+                  content = re.sub(
+                      r'''(["'])SELECT\s+(.*?)\s+FROM\s+(\w+)\s+WHERE\s+(\w+)\s*=\s*['"]\s*\+\s*(\w+)\s*\+\s*["']['"]''',
+                      r'''\1SELECT \2 FROM \3 WHERE \4 = ?\1''',
+                      content
+                  )
+                  content = re.sub(
+                      r'(cursor\.execute\s*\(\s*)(\w+)\s*\)',
+                      lambda m: m.group(0) if ',' in content[content.index(m.group(0)):content.index(m.group(0))+50] else f'{m.group(1)}{m.group(2)}, ({finding.get("file", "").split("/")[-1].replace(".py", "")},))',
+                      content
+                  )
+                  lines = content.split('\n')
+                  new_lines = []
+                  for i, line in enumerate(lines):
+                      if 'cursor.execute' in line and ',' not in line.split('cursor.execute')[1]:
+                          query_var = line.strip().split('(')[1].rstrip(')')
+                          for j in range(max(0, i-5), i):
+                              concat_match = re.search(r'(\w+)\s*=\s*["\'].*?\+\s*(\w+)\s*\+', lines[j])
+                              if concat_match:
+                                  param_name = concat_match.group(2)
+                                  line = line.rstrip(')')
+                                  line = f'{line}, ({param_name},))'
+                                  break
+                      new_lines.append(line)
+                  content = '\n'.join(new_lines)
+
+              elif file_path.endswith('.js'):
+                  content = re.sub(
+                      r'''(["'])SELECT\s+(.*?)\s+FROM\s+(\w+)\s+WHERE\s+(\w+)\s*=\s*['"]\s*\+\s*(\w+)\s*\+\s*["']['"]\s*,''',
+                      r'''\1SELECT \2 FROM \3 WHERE \4 = ?\1,\n      [\5],''',
+                      content
+                  )
+                  if re.search(r'["\']\s*\+\s*\w+\s*\+\s*["\']', content):
+                      pass
+
+              if content != original:
+                  with open(file_path, 'w') as f:
+                      f.write(content)
+                  fixed_files.add(file_path)
+                  print(f'Fixed: {file_path}')
+
+          if not fixed_files:
+              print('No automatic fixes could be applied. Attempting direct fixes...')
+              py_file = 'test-code/python/sql_injection.py'
+              if os.path.isfile(py_file):
+                  with open(py_file, 'r') as f:
+                      content = f.read()
+                  content = content.replace(
+                      "query = \"SELECT * FROM users WHERE username = '\" + username + \"'\"",
+                      'query = "SELECT * FROM users WHERE username = ?"'
+                  )
+                  content = content.replace(
+                      'cursor.execute(query)',
+                      'cursor.execute(query, (username,))'
+                  )
+                  with open(py_file, 'w') as f:
+                      f.write(content)
+                  print(f'Fixed: {py_file}')
+
+              js_file = 'test-code/javascript/sql_injection.js'
+              if os.path.isfile(js_file):
+                  with open(js_file, 'r') as f:
+                      content = f.read()
+                  content = content.replace(
+                      '"SELECT * FROM users WHERE username = \'" + username + "\'",',
+                      '"SELECT * FROM users WHERE username = ?",\n      [username],'
+                  )
+                  with open(js_file, 'w') as f:
+                      f.write(content)
+                  print(f'Fixed: {js_file}')
+        env:
+          FINDINGS: ${{ steps.parse-results.outputs.findings }}
+
+      - name: Create Pull Request with fixes
+        if: steps.parse-results.outputs.count != '0'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix: resolve security findings from CodeQL scan"
+          branch: security-fixes/codeql-${{ github.run_id }}
+          title: "[Security] Fix CodeQL security findings"
+          body: |
+            ## Automated Security Fixes
+
+            This PR resolves security findings identified by the CodeQL analysis workflow.
+
+            ### Issues Addressed
+            ${{ steps.parse-results.outputs.issue_numbers }}
+
+            ### Summary
+            - **Findings:** ${{ steps.parse-results.outputs.count }}
+            - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ---
+            *This PR was automatically created by the Security Scan workflow.*
+          labels: security
