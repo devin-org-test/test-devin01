@@ -10,3 +10,5 @@ function getUserByName(username) {
     }
   );
 }
+
+getUserByName(process.argv[2]);

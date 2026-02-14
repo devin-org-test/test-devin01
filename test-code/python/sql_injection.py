@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 
 
 def get_user_unsafe(username):
@@ -9,3 +10,7 @@ def get_user_unsafe(username):
     results = cursor.fetchall()
     conn.close()
     return results
+
+
+if __name__ == "__main__":
+    get_user_unsafe(sys.argv[1])
