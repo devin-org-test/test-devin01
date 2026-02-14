@@ -13,10 +13,6 @@ jobs:
   scan:
     name: CodeQL Security Scan
     runs-on: ubuntu-latest
-    outputs:
-      findings: ${{ steps.parse-results.outputs.findings }}
-      count: ${{ steps.parse-results.outputs.count }}
-      issue_numbers: ${{ steps.parse-results.outputs.issue_numbers }}
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +35,7 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
           output: sarif-results
-          upload: always
+          upload: false
 
       - name: Upload SARIF as artifact
         uses: actions/upload-artifact@v4
@@ -129,18 +125,19 @@ jobs:
 
             core.info(`Found ${findings.length} security finding(s).`);
 
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security',
+              per_page: 100
+            });
+
             const issueNumbers = [];
             for (const f of findings) {
               const title = `[Security] ${f.ruleName} in ${f.file}:${f.startLine}`;
 
-              const existing = await github.rest.issues.listForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: 'security'
-              });
-
-              const duplicate = existing.data.find(i => i.title === title);
+              const duplicate = existingIssues.data.find(i => i.title === title);
               if (duplicate) {
                 core.info(`Issue already exists: #${duplicate.number} - ${title}`);
                 issueNumbers.push(duplicate.number);
