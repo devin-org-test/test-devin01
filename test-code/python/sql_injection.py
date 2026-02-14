@@ -1,5 +1,8 @@
 import sqlite3
-import sys
+
+from flask import Flask, request
+
+app = Flask(__name__)
 
 
 def get_user_unsafe(username):
@@ -12,5 +15,7 @@ def get_user_unsafe(username):
     return results
 
 
-if __name__ == "__main__":
-    get_user_unsafe(sys.argv[1])
+@app.route("/user")
+def get_user():
+    username = request.args.get("username")
+    return str(get_user_unsafe(username))
