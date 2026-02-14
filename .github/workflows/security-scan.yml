@@ -253,35 +253,36 @@ jobs:
                   fixed_files.add(file_path)
                   print(f'Fixed: {file_path}')
 
-          if not fixed_files:
-              print('No automatic fixes could be applied. Attempting direct fixes...')
-              py_file = 'test-code/python/sql_injection.py'
-              if os.path.isfile(py_file):
-                  with open(py_file, 'r') as f:
-                      content = f.read()
-                  content = content.replace(
-                      "query = \"SELECT * FROM users WHERE username = '\" + username + \"'\"",
-                      'query = "SELECT * FROM users WHERE username = ?"'
-                  )
-                  content = content.replace(
-                      'cursor.execute(query)',
-                      'cursor.execute(query, (username,))'
-                  )
-                  with open(py_file, 'w') as f:
-                      f.write(content)
-                  print(f'Fixed: {py_file}')
+          print('Applying direct fixes for any remaining unfixed files...')
+          py_file = 'test-code/python/sql_injection.py'
+          if py_file not in fixed_files and os.path.isfile(py_file):
+              with open(py_file, 'r') as f:
+                  content = f.read()
+              content = content.replace(
+                  "query = \"SELECT * FROM users WHERE username = '\" + username + \"'\"",
+                  'query = "SELECT * FROM users WHERE username = ?"'
+              )
+              content = content.replace(
+                  'cursor.execute(query)',
+                  'cursor.execute(query, (username,))'
+              )
+              with open(py_file, 'w') as f:
+                  f.write(content)
+              fixed_files.add(py_file)
+              print(f'Fixed: {py_file}')
 
-              js_file = 'test-code/javascript/sql_injection.js'
-              if os.path.isfile(js_file):
-                  with open(js_file, 'r') as f:
-                      content = f.read()
-                  content = content.replace(
-                      '"SELECT * FROM users WHERE username = \'" + username + "\'",',
-                      '"SELECT * FROM users WHERE username = ?",\n      [username],'
-                  )
-                  with open(js_file, 'w') as f:
-                      f.write(content)
-                  print(f'Fixed: {js_file}')
+          js_file = 'test-code/javascript/sql_injection.js'
+          if js_file not in fixed_files and os.path.isfile(js_file):
+              with open(js_file, 'r') as f:
+                  content = f.read()
+              content = content.replace(
+                  '"SELECT * FROM users WHERE username = \'" + username + "\'",',
+                  '"SELECT * FROM users WHERE username = ?",\n      [username],'
+              )
+              with open(js_file, 'w') as f:
+                  f.write(content)
+              fixed_files.add(js_file)
+              print(f'Fixed: {js_file}')
         env:
           FINDINGS: ${{ steps.parse-results.outputs.findings }}
 
