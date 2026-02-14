@@ -5,7 +5,8 @@ const db = new sqlite3.Database(":memory:");
 
 function getUserByName(username) {
   db.all(
-    "SELECT * FROM users WHERE username = '" + username + "'",
+    "SELECT * FROM users WHERE username = ?",
+      [username],
     (err, rows) => {
       return rows;
     }
