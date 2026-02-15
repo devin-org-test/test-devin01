@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Scan Workflow — Visual Aid</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --step-bg: #1c2128;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 40px 20px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 40px;
+  }
+
+  /* ── Trigger banner ── */
+  .trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #1a1e2e, #161b22);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 24px;
+    margin-bottom: 12px;
+    max-width: 460px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .trigger .icon { font-size: 22px; }
+  .trigger .label { font-weight: 600; font-size: 15px; }
+  .trigger .detail { color: var(--muted); font-size: 13px; }
+
+  /* ── Permissions strip ── */
+  .permissions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+  .perm-badge {
+    background: #1c2128;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  /* ── Arrow connector ── */
+  .arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 18px 0;
+    color: var(--muted);
+    font-size: 12px;
+    gap: 2px;
+  }
+  .arrow .line {
+    width: 2px;
+    height: 28px;
+    background: var(--border);
+  }
+  .arrow .head {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--border);
+  }
+  .arrow .note {
+    margin-top: 2px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── Job card ── */
+  .job {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+  .job-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(88,166,255,.08), transparent);
+  }
+  .job-header .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .job-header .dot.blue { background: var(--accent); }
+  .job-header .dot.purple { background: var(--purple); }
+  .job-header .name { font-weight: 600; font-size: 16px; }
+  .job-header .meta {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .job-header .meta code {
+    background: #1c2128;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── Matrix banner ── */
+  .matrix-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: rgba(188,140,255,.06);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--purple);
+  }
+  .matrix-banner code {
+    background: #1c2128;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  /* ── Steps ── */
+  .steps { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--step-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    position: relative;
+    transition: border-color .15s;
+  }
+  .step:hover { border-color: var(--accent); }
+
+  .step-num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    background: rgba(88,166,255,.12);
+    color: var(--accent);
+    border: 1px solid rgba(88,166,255,.25);
+  }
+  .step-body { flex: 1; }
+  .step-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .step-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .step-action {
+    display: inline-block;
+    font-size: 11px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    background: rgba(88,166,255,.08);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  .step.conditional {
+    border-left: 3px solid var(--orange);
+  }
+  .cond-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    background: rgba(210,153,34,.1);
+    color: var(--orange);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* ── Outputs strip ── */
+  .outputs {
+    padding: 10px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .output-tag {
+    background: rgba(63,185,80,.08);
+    color: var(--green);
+    border: 1px solid rgba(63,185,80,.2);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 11px;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    margin-top: 36px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    padding: 18px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+  .legend-swatch.matrix { background: rgba(188,140,255,.25); border: 1px solid var(--purple); }
+  .legend-swatch.cond { background: rgba(210,153,34,.25); border: 1px solid var(--orange); }
+  .legend-swatch.artifact { background: rgba(63,185,80,.15); border: 1px solid var(--green); }
+  .legend-swatch.action { background: rgba(88,166,255,.15); border: 1px solid var(--accent); }
+
+  /* ── Parallel lanes for matrix ── */
+  .matrix-lanes {
+    display: flex;
+    gap: 14px;
+    padding: 16px 20px;
+  }
+  .lane {
+    flex: 1;
+    border: 1px dashed rgba(188,140,255,.3);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  .lane-label {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--purple);
+    margin-bottom: 8px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+  .lane .step { margin-bottom: 8px; }
+  .lane .step:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Security Scan Workflow</h1>
+  <p class="subtitle">.github/workflows/security-scan.yml</p>
+
+  <!-- ── TRIGGER ── -->
+  <div class="trigger">
+    <span class="icon">🖱️</span>
+    <div>
+      <div class="label">Manual Trigger</div>
+      <div class="detail">workflow_dispatch — run from Actions tab</div>
+    </div>
+  </div>
+
+  <!-- Permissions -->
+  <div class="permissions">
+    <span class="perm-badge">contents: write</span>
+    <span class="perm-badge">issues: write</span>
+    <span class="perm-badge">pull-requests: write</span>
+    <span class="perm-badge">security-events: write</span>
+  </div>
+
+  <!-- ════════════ JOB 1 ════════════ -->
+  <div class="job">
+    <div class="job-header">
+      <span class="dot blue"></span>
+      <span class="name">Job 1 — CodeQL Security Scan</span>
+      <span class="meta">
+        <code>ubuntu-latest</code>
+        <span>fail-fast: false</span>
+      </span>
+    </div>
+
+    <div class="matrix-banner">
+      ⚡ Runs in parallel for each language:
+      <code>javascript-typescript</code>
+      <code>python</code>
+    </div>
+
+    <div class="matrix-lanes">
+      <!-- Lane: JS/TS -->
+      <div class="lane">
+        <div class="lane-label">javascript-typescript</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-name">Checkout repository</div>
+            <div class="step-action">actions/checkout@v4</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-name">Initialize CodeQL</div>
+            <div class="step-desc">Language: javascript-typescript<br>Queries: security-extended</div>
+            <div class="step-action">github/codeql-action/init@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-name">Autobuild</div>
+            <div class="step-desc">Automatically builds the project for analysis</div>
+            <div class="step-action">github/codeql-action/autobuild@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-name">Perform CodeQL Analysis</div>
+            <div class="step-desc">Category: /language:javascript-typescript<br>Output: SARIF results (not uploaded to GitHub)</div>
+            <div class="step-action">github/codeql-action/analyze@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-name">Upload SARIF artifact</div>
+            <div class="step-desc">Artifact: sarif-javascript-typescript<br>Retention: 5 days</div>
+            <div class="step-action">actions/upload-artifact@v4</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lane: Python -->
+      <div class="lane">
+        <div class="lane-label">python</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-name">Checkout repository</div>
+            <div class="step-action">actions/checkout@v4</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-name">Initialize CodeQL</div>
+            <div class="step-desc">Language: python<br>Queries: security-extended</div>
+            <div class="step-action">github/codeql-action/init@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-name">Autobuild</div>
+            <div class="step-desc">Automatically builds the project for analysis</div>
+            <div class="step-action">github/codeql-action/autobuild@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-name">Perform CodeQL Analysis</div>
+            <div class="step-desc">Category: /language:python<br>Output: SARIF results (not uploaded to GitHub)</div>
+            <div class="step-action">github/codeql-action/analyze@v3</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-name">Upload SARIF artifact</div>
+            <div class="step-desc">Artifact: sarif-python<br>Retention: 5 days</div>
+            <div class="step-action">actions/upload-artifact@v4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="outputs">
+      <span>Artifacts produced:</span>
+      <span class="output-tag">sarif-javascript-typescript</span>
+      <span class="output-tag">sarif-python</span>
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div class="arrow">
+    <div class="line"></div>
+    <div class="head"></div>
+    <div class="note">needs: scan (waits for both matrix jobs)</div>
+  </div>
+
+  <!-- ════════════ JOB 2 ════════════ -->
+  <div class="job">
+    <div class="job-header">
+      <span class="dot purple"></span>
+      <span class="name">Job 2 — Create Issues and Fix</span>
+      <span class="meta">
+        <code>ubuntu-latest</code>
+      </span>
+    </div>
+
+    <div class="steps">
+      <!-- Step 1 -->
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-name">Checkout repository</div>
+          <div class="step-action">actions/checkout@v4</div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-name">Download all SARIF artifacts</div>
+          <div class="step-desc">Merges artifacts from both matrix lanes into sarif-results/</div>
+          <div class="step-action">actions/download-artifact@v4</div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-name">Ensure "security" label exists</div>
+          <div class="step-desc">Checks for an existing <strong>security</strong> label; creates one (red, #d73a4a) if missing</div>
+          <div class="step-action">actions/github-script@v7</div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-name">Parse SARIF &amp; create GitHub Issues</div>
+          <div class="step-desc">
+            Reads every .sarif file, extracts findings (rule, severity, file, line).<br>
+            Skips duplicates by matching issue titles. Creates new issues for novel findings.<br>
+            Writes a summary table to the Actions run.
+          </div>
+          <div class="step-action">actions/github-script@v7</div>
+        </div>
+      </div>
+
+      <!-- Step 5 — conditional -->
+      <div class="step conditional">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-name">Apply security fixes</div>
+          <div class="step-desc">
+            Python script that auto-patches SQL injection vulnerabilities:<br>
+            &bull; Rewrites string-concatenated queries to parameterized queries in .py and .js files<br>
+            &bull; Falls back to direct file patching for known vulnerable files
+          </div>
+          <div class="step-action">python3 (inline script)</div>
+          <div class="cond-badge">if: findings count &ne; 0</div>
+        </div>
+      </div>
+
+      <!-- Step 6 — conditional -->
+      <div class="step conditional">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-name">Create Pull Request with fixes</div>
+          <div class="step-desc">
+            Opens a PR on branch <code>security-fixes/codeql-{run_id}</code><br>
+            Commit message: "fix: resolve security findings from CodeQL scan"<br>
+            Links to created issue numbers and the Actions run
+          </div>
+          <div class="step-action">peter-evans/create-pull-request@v7</div>
+          <div class="cond-badge">if: findings count &ne; 0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="outputs">
+      <span>Outputs:</span>
+      <span class="output-tag">GitHub Issues (labeled "security")</span>
+      <span class="output-tag">Pull Request with auto-fixes</span>
+    </div>
+  </div>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-swatch matrix"></div>
+      Matrix / parallel execution
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch cond"></div>
+      Conditional step (only if findings &gt; 0)
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch artifact"></div>
+      Artifact / output
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch action"></div>
+      GitHub Action reference
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
